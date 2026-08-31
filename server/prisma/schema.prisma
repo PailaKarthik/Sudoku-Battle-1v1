@@ -1,0 +1,294 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SudokuVariant {
+  TWO_BY_THREE
+  THREE_BY_THREE
+}
+
+enum SudokuDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum BattleStatus {
+  WAITING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BattleResult {
+  WIN
+  LOSS
+  DRAW
+}
+
+enum BattleInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id String @id @default(uuid())
+
+  googleId String @unique
+  email    String @unique
+
+  username    String? @unique
+  displayName String?
+  avatarUrl   String?
+
+  profileCompleted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sentFriendRequests     FriendRequest[] @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequests")
+
+  friendshipsInitiated Friendship[] @relation("FriendshipUser")
+  friendshipsReceived  Friendship[] @relation("FriendshipFriend")
+
+  sentBattleInvites     BattleInvite[] @relation("SentBattleInvites")
+  receivedBattleInvites BattleInvite[] @relation("ReceivedBattleInvites")
+
+  ratings Rating[]
+
+  dailyAttempts DailyAttempt[]
+
+  battlePlayers BattlePlayer[]
+
+  sessions AuthSession[]
+
+  @@index([username])
+  @@index([createdAt])
+}
+
+model FriendRequest {
+  id String @id @default(uuid())
+
+  senderId   String
+  receiverId String
+
+  status FriendRequestStatus @default(PENDING)
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  sender   User @relation("SentFriendRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriendRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, status])
+  @@index([senderId, status])
+  @@index([createdAt])
+}
+
+model Friendship {
+  id String @id @default(uuid())
+
+  userId   String
+  friendId String
+
+  createdAt DateTime @default(now())
+
+  user   User @relation("FriendshipUser", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendshipFriend", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([friendId])
+}
+
+model SudokuPuzzle {
+  id       String        @id @default(cuid())
+  puzzleId String        @unique
+  variant  SudokuVariant @default(TWO_BY_THREE)
+
+  puzzle   String
+  solution String
+
+  difficulty         SudokuDifficulty
+  difficultyScore    Float
+  clueCount          Int
+  estimatedSolveTime Int
+  seed               BigInt
+
+  createdAt DateTime @default(now())
+
+  dailyChallenges DailyChallenge[]
+  battles         Battle[]
+
+  @@index([variant])
+  @@index([variant, difficulty])
+  @@index([variant, difficultyScore])
+}
+
+model DailyChallenge {
+  id String @id @default(uuid())
+
+  challengeDate DateTime @db.Date
+
+  variant SudokuVariant
+
+  puzzleId String
+
+  puzzle SudokuPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  attempts DailyAttempt[]
+
+  @@unique([challengeDate, variant])
+  @@index([challengeDate])
+}
+
+model DailyAttempt {
+  id String @id @default(uuid())
+
+  challengeId String
+  userId      String
+
+  completionTimeMs Int
+
+  completedAt DateTime @default(now())
+
+  challenge DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([challengeId, completionTimeMs])
+  @@index([userId, completedAt])
+}
+
+model Rating {
+  id String @id @default(uuid())
+
+  userId  String
+  variant SudokuVariant
+
+  rating Int @default(1000)
+
+  gamesPlayed Int @default(0)
+  wins        Int @default(0)
+  losses      Int @default(0)
+  draws       Int @default(0)
+
+  highestRating Int @default(1000)
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, variant])
+  @@index([variant, rating])
+  @@index([userId])
+}
+model Battle {
+  id String @id @default(uuid())
+
+  variant  SudokuVariant
+  puzzleId String
+
+  status BattleStatus @default(WAITING)
+
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  puzzle SudokuPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Restrict)
+
+  players BattlePlayer[]
+
+  @@index([variant, status])
+  @@index([createdAt])
+}
+
+model BattlePlayer {
+  id String @id @default(uuid())
+
+  battleId String
+  userId   String
+
+  slot Int
+
+  result BattleResult?
+
+  completionTimeMs Int?
+
+  ratingBefore Int?
+  ratingChange Int?
+  ratingAfter  Int?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  battle Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([battleId, userId])
+  @@unique([battleId, slot])
+  @@index([userId, createdAt])
+  @@index([battleId])
+}
+
+model AuthSession {
+  id String @id @default(uuid())
+
+  userId String
+
+  refreshTokenHash String @unique
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model BattleInvite {
+  id String @id @default(uuid())
+
+  senderId   String
+  receiverId String
+
+  variant SudokuVariant
+
+  status BattleInviteStatus @default(PENDING)
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  sender User @relation("SentBattleInvites", fields: [senderId], references: [id], onDelete: Cascade)
+
+  receiver User @relation("ReceivedBattleInvites", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, status])
+  @@index([senderId, status])
+  @@index([createdAt])
+}
