@@ -1,4 +1,4 @@
-# ⚔️ Sudoku Battle 1v1
+# ⚔️ Sudoku Battle 1v1 [app link](https://expo.dev/accounts/karthikpaila/projects/riskview/builds/feb3d11d-7482-476b-b271-0a02084952fb)
 
 <p align="center">
   <strong>A real-time, head-to-head Sudoku experience built for fast thinkers.</strong><br />
